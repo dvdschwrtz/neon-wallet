@@ -18,10 +18,9 @@ import asyncWrap from '../core/asyncHelper'
 
 export const CURRENT_VERSION = 0
 
-export const ledgerNanoSCreateSignatureAsync = async (txData) => {
-  let signatureInfo = 'Ledger Signing Text of Length [' + txData.length + "], Please Confirm Using the Device's Buttons. " + txData
+export const ledgerNanoSCreateSignatureAsync = async (unsignedTx, publicKey) => {
+  const txData = serializeTransaction(unsignedTx)
   const signData = txData + BIP44_PATH
-  process.stdout.write(signatureInfo + '\n')
   const validStatus = [0x9000]
   const messages = []
 
@@ -42,35 +41,29 @@ export const ledgerNanoSCreateSignatureAsync = async (txData) => {
     }
 
     const chunkLength = chunk.length / 2
-    process.stdout.write('Ledger Signature chunkLength ' + chunkLength + '\n')
     let chunkLengthHex = chunkLength.toString(16)
     while (chunkLengthHex.length < 2) {
       chunkLengthHex = '0' + chunkLengthHex
     }
 
-    process.stdout.write('Ledger Signature chunkLength hex ' + chunkLengthHex + '\n')
-
     messages.push('8002' + p1 + '00' + chunkLengthHex + chunk)
     offset += chunk.length
   }
 
-  process.stdout.write('what is messages' + messages + '\n')
   let [err, comm] = await asyncWrap(commNode.create_async(0, false))
   if (err) {
-    process.stdout.write('Signature Reponse An error occured[2]: ' + err + '\n')
+    console.log('Signature Reponse An error occured[2]:', err)
     return 'An error occured[2]: ' + err
   }
   for (let ix = 0; ix < messages.length; ix++) {
     let message = messages[ix]
-    process.stdout.write('Ledger Message (' + ix + '/' + messages.length + ') ' + message + '\n')
 
     let [error, response] = await asyncWrap(comm.exchange(message, validStatus))
     if (error) {
       comm.device.close()
-      process.stdout.write('Signature Reponse An error occured[1]: ' + error + '\n')
+      console.log('Signature Reponse An error occured[1]:', error)
       return 'An error occured[1]: ' + error
     }
-    process.stdout.write('Ledger Signature Response ' + response + '\n')
     if (response !== '9000') {
       comm.device.close()
 
@@ -89,40 +82,25 @@ export const ledgerNanoSCreateSignatureAsync = async (txData) => {
        */
 
       let rLenHex = response.substring(6, 8)
-      process.stdout.write('Ledger Signature rLenHex ' + rLenHex + '\n')
       let rLen = parseInt(rLenHex, 16) * 2
-      process.stdout.write('Ledger Signature rLen ' + rLen + '\n')
       let rStart = 8
-      process.stdout.write('Ledger Signature rStart ' + rStart + '\n')
       let rEnd = rStart + rLen
-      process.stdout.write('Ledger Signature rEnd ' + rEnd + '\n')
 
       while ((response.substring(rStart, rStart + 2) === '00') && ((rEnd - rStart) > 64)) {
         rStart += 2
       }
 
       let r = response.substring(rStart, rEnd)
-      process.stdout.write('Ledger Signature R [' + rStart + ',' + rEnd + ']:' + (rEnd - rStart) + ' ' + r + '\n')
       let sLenHex = response.substring(rEnd + 2, rEnd + 4)
-      process.stdout.write('Ledger Signature sLenHex ' + sLenHex + '\n')
       let sLen = parseInt(sLenHex, 16) * 2
-      process.stdout.write('Ledger Signature sLen ' + sLen + '\n')
       let sStart = rEnd + 4
-      process.stdout.write('Ledger Signature sStart ' + sStart + '\n')
       let sEnd = sStart + sLen
-      process.stdout.write('Ledger Signature sEnd ' + sEnd + '\n')
 
       while ((response.substring(sStart, sStart + 2) === '00') && ((sEnd - sStart) > 64)) {
         sStart += 2
       }
 
       let s = response.substring(sStart, sEnd)
-      process.stdout.write('Ledger Signature S [' + sStart + ',' + sEnd + ']:' + (sEnd - sStart) + ' ' + s + '\n')
-
-      let msgHashStart = sEnd + 4
-      let msgHashEnd = msgHashStart + 64
-      let msgHash = response.substring(msgHashStart, msgHashEnd)
-      process.stdout.write('Ledger Signature msgHash [' + msgHashStart + ',' + msgHashEnd + '] ' + msgHash + '\n')
 
       while (r.length < 64) {
         r = '00' + r
@@ -133,14 +111,12 @@ export const ledgerNanoSCreateSignatureAsync = async (txData) => {
       }
 
       let signature = r + s
-      let signatureInfo = 'Signature of Length [' + signature.length + '] : ' + signature
-      process.stdout.write('r[' + r.length + ']:"' + r + '"+s[' + s.length + ']"' + s + '" =' + signatureInfo + '\n')
-
-      return signature
+      return addContract(txData, signature, publicKey)
     }
   }
 }
 
+// NOTE everything below this line will disappear soon!
 export const hardwareDoClaimAllGas = (net, publicKey, signingFunction) => {
   return new Promise(function (resolve, reject) {
     ledgerNanoSGetdoClaimAllGas(net, publicKey, ledgerNanoSCreateSignatureAsync).then((response) => {
@@ -198,15 +174,7 @@ export const ledgerNanoSGetdoSendAsset = (net, toAddress, assetAmounts, signingF
 
       const unsignedTx = ContractTx(fromAccount.publicKeyEncoded, balances, intents)
       process.stdout.write('interim ledgerNanoSGetdoSendAsset serializeTransaction unsignedTx "' + JSON.stringify(unsignedTx) + '" \n')
-      const txData = serializeTransaction(unsignedTx)
-      process.stdout.write('interim ledgerNanoSGetdoSendAsset txData "' + txData + '" \n')
-      signingFunction(txData).then((sign) => {
-        process.stdout.write('interim ledgerNanoSGetdoSendAsset sign1 "' + JSON.stringify(sign) + '" \n')
-        process.stdout.write('interim ledgerNanoSGetdoSendAsset sign2 "' + JSON.stringify(sign) + '" \n')
-        process.stdout.write('interim ledgerNanoSGetdoSendAsset sign account "' + JSON.stringify(fromAccount) + '" \n')
-        process.stdout.write('interim ledgerNanoSGetdoSendAsset sign account.publicKeyEncoded "' + fromAccount.publicKeyEncoded + '" \n')
-        process.stdout.write('interim ledgerNanoSGetdoSendAsset sign Ledger "' + sign + '" \n')
-        const txRawData = addContract(txData, sign, fromAccount.publicKeyEncoded)
+      signingFunction(unsignedTx, fromAccount.publicKeyEncoded).then((txRawData) => {
         queryRPC(net, 'sendrawtransaction', [txRawData], 4).then((response) => {
           process.stdout.write('interim ledgerNanoSGetdoSendAsset sendrawtransaction "' + JSON.stringify(response) + '" \n')
           resolve(response)
@@ -240,13 +208,9 @@ export const ledgerNanoSGetdoClaimAllGas = (net, publicKey, signingFunction) => 
     // TODO: when fully working replace this with mainnet/testnet switch
     return axios.get(apiEndpoint + '/v2/address/claims/' + fromAccount.address).then((response) => {
       process.stdout.write('interim ledgerNanoSGetdoClaimAllGas sign signingFunction "' + (signingFunction instanceof Function) + '" \n')
-      const txData = serializeTransaction(create.claim(fromAccount.publicKeyEncoded, response.data))
-      process.stdout.write('interim ledgerNanoSGetdoClaimAllGas txData "' + txData + '" \n')
-      signingFunction(txData).then((sign) => {
-        process.stdout.write('interim ledgerNanoSGetdoClaimAllGas sign fromAccount "' + JSON.stringify(fromAccount) + '" \n')
-        process.stdout.write('interim ledgerNanoSGetdoClaimAllGas sign fromAccount.publicKeyEncoded "' + fromAccount.publicKeyEncoded + '" \n')
-        process.stdout.write('interim ledgerNanoSGetdoClaimAllGas sign Ledger "' + sign + '" \n')
-        const txRawData = addContract(txData, sign, fromAccount.publicKeyEncoded)
+      const unsignedTx = create.claim(fromAccount.publicKeyEncoded, response.data)
+      process.stdout.write('interim ledgerNanoSGetdoClaimAllGas unsignedTx "' + unsignedTx + '" \n')
+      signingFunction(unsignedTx, fromAccount.publicKeyEncoded).then((txRawData) => {
         queryRPC(net, 'sendrawtransaction', [txRawData], 4).then((response) => {
           resolve(response)
         }).catch(function (reason) {

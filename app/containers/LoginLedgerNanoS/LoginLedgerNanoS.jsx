@@ -19,9 +19,7 @@ export default class LoginLedgerNanoS extends Component<Props> {
   }
 
   _componentDidMount = async (getInfoAsync: Function) => {
-    // process.stdout.write('started componentDidMount  \n')
     await getInfoAsync()
-    // process.stdout.write('success componentDidMount  \n')
   }
 
   onLedgerNanoSChange = () => {
