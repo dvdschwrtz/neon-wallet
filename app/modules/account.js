@@ -84,36 +84,29 @@ export const onWifChange = (history: Object, wif: string) => (dispatch: Dispatch
 
 export const ledgerNanoSGetInfoAsync = () => async (dispatch: DispatchType) => {
   dispatch(hardwareDeviceInfo('Looking for USB Devices'))
-  // console.log('started ledgerNanoSGetInfoAsync')
   let [err, result] = await asyncWrap(commNode.list_async())
   if (err) return dispatch(hardwareDeviceInfo(`Finding USB Error: ${err}`))
   if (result.length === 0) {
-    // console.log('getLedgerDeviceInfo "No device found"')
     return dispatch(hardwareDeviceInfo('USB Failure: No device found'))
   } else {
     let [err, comm] = await asyncWrap(commNode.create_async())
     if (err) return dispatch(hardwareDeviceInfo(`Finding USB Error: ${err}`))
 
     const deviceInfo = comm.device.getDeviceInfo()
-    // process.stdout.write('getLedgerDeviceInfo success  "' + ledgerNanoSGetDeviceInfo + '"\n')
     comm.device.close()
     dispatch(hardwareDeviceInfo(`Found USB ${deviceInfo.manufacturer} ${deviceInfo.product}`))
   }
-  // process.stdout.write('success ledgerNanoSGetInfoAsync  \n')
   [err, result] = await asyncWrap(commNode.list_async())
   if (result.length === 0) {
-    // process.stdout.write('getPublicKeyInfo "No device found"\n')
     dispatch(hardwarePublicKeyInfo('App Failure: No device found'))
   } else {
     let [err, comm] = await asyncWrap(commNode.create_async())
     if (err) return dispatch(hardwarePublicKeyInfo(`Public Key Comm Init Error: ${err}`))
-
     let message = Buffer.from(`8004000000${BIP44_PATH}`, 'hex')
     const validStatus = [0x9000]
     let [error, response] = await asyncWrap(comm.exchange(message.toString('hex'), validStatus))
     if (error) {
       comm.device.close() // NOTE: do we need this close here - what about the other errors that do not have it at the moment
-      // process.stdout.write('getPublicKeyInfo comm.exchange error reason ' + err + '\n')
       if (error === 'Invalid status 28160') {
         return dispatch(hardwarePublicKeyInfo('NEO App does not appear to be open, request for private key returned error 28160.'))
       } else {
@@ -121,12 +114,9 @@ export const ledgerNanoSGetInfoAsync = () => async (dispatch: DispatchType) => {
       }
     }
     comm.device.close()
-    // process.stdout.write('getPublicKey success  "' + ledgerNanoSGetPublicKey + '"\n')
-    // process.stdout.write('getPublicKeyInfo success  "' + ledgerNanoSGetPublicKeyInfo + '"\n')
     dispatch(hardwarePublicKey(response.substring(0, 130)))
     return dispatch(hardwarePublicKeyInfo('App Found, Public Key Available'))
   }
-  // process.stdout.write('success getPublicKeyInfo  \n')
 }
 
 // Reducer that manages account state (account now = private key)
